@@ -4,7 +4,7 @@ let isLoginMode = true;
 let loginAttempts = 0;
 let isLocked = false;
 let myChart = null;
-let selectedChartType = 'doughnut'; // Varsayılan grafik tipi
+
 
 // BINLIK AYIRICI (1.250,00 TL)
 function formatPara(sayi) {
@@ -368,12 +368,4 @@ function temizFiyatGetir() {
     const hamDeger = document.getElementById('input-fiyat').value;
     // Noktaları temizle ve sayıya çevir
     return parseFloat(hamDeger.replace(/\./g, "")) || 0;
-}
-function setChartType(type) {
-    selectedChartType = type;
-    // Buton görünümlerini güncelle
-    document.getElementById('btn-doughnut').classList.toggle('active', type === 'doughnut');
-    document.getElementById('btn-line').classList.toggle('active', type === 'line');
-    // UI'yı yenileyerek grafiği tekrar çiz
-    updateUI();
 }
