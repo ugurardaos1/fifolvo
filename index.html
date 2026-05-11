@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart-FIFO | Professional Ledger Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- EXCEL OKUMA KÜTÜPHANESİ (EKLEDİĞİMİZ KISIM) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+    <div id="login-screen" class="auth-wrapper">
+        <div class="auth-card">
+            <div class="auth-logo">SF</div>
+            <h1 id="auth-title">Hoş Geldiniz</h1>
+            <p id="auth-subtitle">İşletme verilerinize erişmek için giriş yapın.</p>
+            
+            <div class="auth-form">
+                <div class="input-group">
+                    <label>Kullanıcı Adı</label>
+                    <input type="text" id="auth-user" placeholder="Kullanıcı adınız">
+                </div>
+                <div class="input-group">
+                    <label>Şifre</label>
+                    <input type="password" id="auth-pass" placeholder="••••••••">
+                </div>
+                <button id="auth-main-btn" class="btn-primary" onclick="handleAuth()">Giriş Yap</button>
+            </div>
+
+            <div class="auth-footer">
+                <div id="toggle-text" class="toggle-link" onclick="toggleAuth()">
+                    Hesabınız yok mu? <span>Kayıt Olun</span>
+                </div>
+                <p id="auth-error" class="error-text" style="display:none;"></p>
+                <p id="lockout-msg" class="lockout-text" style="display:none;"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="app-container" style="display: none;">
+        <header class="navbar">
+            <div class="nav-brand">Smart-FIFO <span>PRO</span></div>
+            <div class="nav-user">
+                <span id="user-display"></span>
+                <button onclick="logout()" class="btn-outline">Çıkış Yap</button>
+            </div>
+        </header>
+
+        <section id="admin-panel" class="admin-panel" style="display: none;">
+            <h3>👑 Yönetici Denetimi</h3>
+            <table id="admin-table">
+                <thead><tr><th>Kullanıcı</th><th>Şifre</th><th>İşlem</th><th>Yönetim</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </section>
+
+        <main class="dashboard-content">    
+            <div class="stats-grid">
+                <div class="stat-card"><span>Stok Değeri</span><h2 id="stok-val">0,00 TL</h2></div>
+                <div class="stat-card"><span>Toplam Ciro</span><h2 id="ciro-val">0,00 TL</h2></div>
+                <div class="stat-card highlight"><span>Net Kâr</span><h2 id="kar-val">0,00 TL</h2></div>
+            </div>
+
+            <div class="main-grid">
+                <aside class="control-panel">
+                    <div class="form-section">
+                        <h3>📦 Stok ve Satış</h3>
+                        <input type="text" id="input-adi" class="styled-input" placeholder="Ürün İsmi">
+                        <input type="number" id="input-miktar" class="styled-input" placeholder="Miktar">
+                        <!-- Mevcut Birim Fiyat inputunu şu şekilde güncelle veya altına ekle -->
+<div class="input-group">
+    <input type="text" id="input-fiyat" class="styled-input" placeholder="Birim Fiyat (Örn: 1250)" oninput="formatliGiris(this)">
+    <br>
+    <small id="fiyat-onizleme" style="display: block; color: var(--primary); font-weight: 600; margin-top: -10px; margin-bottom: 10px;">0,00 TL</small>
+</div>
+                        <select id="kdv-oran" class="styled-input">
+                            <option value="0.20">%20 KDV</option>
+                            <option value="0.10">%10 KDV</option>
+                        </select>
+                        <div class="btn-row">
+                            <button onclick="stokEkle()" class="btn-success">Stok Al</button>
+                            <button onclick="satisYap()" class="btn-warning">Satış Yap</button>
+                        </div>
+                        <br>
+                        <br>
+
+                        <!-- Dashboard Content içinde, istatistik kartlarının hemen altına ekle -->
+                  <div id="ai-advisor" class="ai-panel">
+                  <div class="ai-header">
+        <span>🤖 Smart-AI Ticari Danışman</span>
+        <button onclick="aiAnalizYap()" class="btn-ai-refresh">Analiz Et</button>
+                </div>
+                <p id="ai-suggestion">Verilerinizi analiz etmek için "Analiz Et" butonuna tıklayın.</p>
+            </div>
+
+<!-- Tablo konteynerinin içine, <h3>İşlem Geçmişi</h3> altına ekle -->
+<div class="search-wrapper">
+    <input type="text" id="tablo-arama" onkeyup="tablodaAra()" placeholder="Ürün veya açıklama ara...">
+</div>
+
+                        
+                        
+                        <!-- EXCEL İÇE AKTAR (EKLEDİĞİMİZ KISIM) -->
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                            <label style="display: block; font-size: 12px; margin-bottom: 5px; color: #666;">Excel ile Toplu Stok Yükle:</label>
+                            <input type="file" id="excel-file" accept=".xlsx, .xls" style="font-size: 11px; margin-bottom: 5px; width: 100%;">
+                            <button onclick="importExcel()" class="btn-dark" style="width: 100%; background: #059669;">Excel'den Aktar</button>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+
+                        <h3>💸 Gider Girişi</h3>
+                        <input type="text" id="gider-adi" class="styled-input" placeholder="Gider Açıklaması">
+                        <input type="number" id="gider-tutar" class="styled-input" placeholder="Tutar (TL)">
+                        <select id="gider-kat" class="styled-input">
+                            <option value="Sabit">Sabit Gider</option>
+                            <option value="Değişken">Değişken Gider</option>
+                        </select>
+                        <button onclick="giderEkle()" class="btn-dark">Gideri Kaydet</button>
+                    </div>
+
+                    <div class="actions">
+                        <button onclick="generatePDF()" class="btn-pdf">📄 PDF Raporu İndir</button>
+                        <button onclick="resetData()" class="btn-link">Verileri Sıfırla</button>
+                    </div>
+                </aside>
+
+                <section class="display-panel">
+                    <div class="chart-container">
+                        <div class="chart-selector" style="margin-bottom: 15px; display: flex; gap: 10px;">
+    <button onclick="setChartType('doughnut')" id="btn-doughnut" class="btn-chart active">Daire Grafik</button>
+    <button onclick="setChartType('line')" id="btn-line" class="btn-chart">Çizgi Grafik (Zaman Serisi)</button>
+</div>
+<div class="chart-container">
+    <canvas id="mainChart"></canvas>
+</div>
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                    <div class="table-container">
+                        <h3>İşlem Geçmişi</h3>
+                        <table id="stok-table">
+                            <thead><tr><th>Açıklama</th><th>Detay</th><th>Tutar</th><th>Tarih</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+<!-- Mevcut Tablo Konteynerinin İçine (İşlem Geçmişi Altına) Ekleyin -->
+<div class="table-container" style="margin-top: 30px;">
+    <h3>Satılan Stoklar Geçmişi</h3>
+    <table id="satis-table">
+        <thead>
+            <tr>
+                <th>Ürün Adı</th>
+                <th>Miktar</th>
+                <th>Birim Satış</th>
+                <th>Toplam (KDV Dahil)</th>
+                <th>Kâr Durumu</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Canlı Piyasa Verileri için Ayrı Bölüm (Gerekirse bir butonla açılabilir) -->
+<div id="market-section" class="display-panel" style="display: none; margin-top: 20px;">
+    <div class="form-section market-panel" style="width: 100%;">
+        <div class="market-header">
+            <h3>📈 Detaylı Canlı Piyasa Ekranı</h3>
+            <button onclick="toggleMarketView()" class="btn-outline">Panele Dön</button>
+        </div>
+        <div id="market-data-full" class="market-grid-large">
+            <!-- Veriler JS ile buraya dolacak -->
+        </div>
+    </div>
+</div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
