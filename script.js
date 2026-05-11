@@ -345,14 +345,17 @@ function toggleMarketView() {
 /**
  * Kullanıcı yazdıkça binlik ayırıcı ekleyen ve görsel geri bildirim veren fonksiyon
  */
+/**
+ * Kullanıcı yazdıkça binlik ayırıcı ekleyen fonksiyon
+ */
 function formatliGiris(input) {
-    // Sadece rakamları al
+    // Sadece rakamları al (nokta ve virgülleri temizle)
     let deger = input.value.replace(/\D/g, "");
     
-    // Sayıya çevir (Boşsa 0 kabul et)
-    let sayisalDeger = parseFloat(deger) || 0;
+    // Sayıya çevir
+    let sayisalDeger = parseInt(deger) || 0;
     
-    // Ekranda binlik ayırıcı ile göster (1.250 gibi)
+    // Ekranda binlik ayırıcı ile göster (Örn: 1.250)
     input.value = sayisalDeger.toLocaleString('tr-TR');
     
     // Alt taraftaki küçük önizleme metnini güncelle
@@ -361,11 +364,106 @@ function formatliGiris(input) {
 }
 
 /**
- * Mevcut stokEkle ve satisYap fonksiyonlarında fiyatı okurken 
- * noktaları temizlememiz gerekir çünkü JS noktayı ondalık sanabilir.
+ * Input içindeki noktalı metni saf sayıya dönüştürür
  */
 function temizFiyatGetir() {
     const hamDeger = document.getElementById('input-fiyat').value;
-    // Noktaları temizle ve sayıya çevir
+    // Tüm noktaları kaldır ki JS bunu büyük bir sayı olarak görsün
     return parseFloat(hamDeger.replace(/\./g, "")) || 0;
+}
+
+// STOK EKLE FONKSİYONUNU GÜNCELLE
+// SATIŞ YAP FONKSİYONU - Düzeltilmiş Kar Hesaplama Mantığı
+function satisYap() {
+    const n = document.getElementById('input-adi').value;
+    let m = parseFloat(document.getElementById('input-miktar').value);
+    const f = temizFiyatGetir(); // Satış Birim Fiyatı
+    const kdv = parseFloat(document.getElementById('kdv-oran').value);
+    
+    // Stok kontrolü
+    let toplamStok = currentUser.data.alimlar
+        .filter(x => x.urun === n)
+        .reduce((s, x) => s + x.kalan, 0);
+
+    if (toplamStok < m) return alert("Yetersiz stok!");
+    
+    let smm = 0; // Satılan Malın Maliyeti
+    let kalanMiktar = m;
+
+    // FIFO Mantığı ile Stoktan Düşme
+    for (let s of currentUser.data.alimlar) {
+        if (s.urun === n && s.kalan > 0 && kalanMiktar > 0) {
+            let dusulecek = Math.min(s.kalan, kalanMiktar);
+            smm += dusulecek * s.maliyet; // Alış maliyetini biriktir
+            s.kalan -= dusulecek;
+            kalanMiktar -= dusulecek;
+        }
+    }
+
+    // Satışı kaydet (KDV'siz fiyat üzerinden kar hesaplanacağı için f'yi olduğu gibi saklıyoruz)
+    currentUser.data.satislar.push({ 
+        urun: n, 
+        miktar: m, 
+        fiyat: f, 
+        kdv: kdv, 
+        maliyet: smm, // Toplam alış maliyeti
+        tarih: new Date().toLocaleDateString() 
+    });
+
+    saveAndRefresh();
+    alert("Satış başarıyla gerçekleştirildi!");
+}
+
+// UPDATE UI - Kârın Ekrana Doğru Yansıması
+function updateUI() {
+    if (!currentUser) return;
+    
+    // Stok Tablosu Güncelleme
+    const tbodyStok = document.querySelector('#stok-table tbody');
+    tbodyStok.innerHTML = "";
+    currentUser.data.alimlar.filter(x => x.kalan > 0).forEach(x => {
+        const warningClass = x.kalan < 5 ? 'stock-warning' : '';
+        tbodyStok.innerHTML += `
+            <tr class="${warningClass}">
+                <td>📦 ${x.urun} ${x.kalan < 5 ? '(KRİTİK!)' : ''}</td>
+                <td>${x.kalan} Adet</td>
+                <td>${formatPara(x.maliyet)} TL</td>
+                <td>${x.tarih}</td>
+            </tr>`;
+    });
+
+    // Satış Geçmişi Tablosu Güncelleme
+    const tbodySatis = document.querySelector('#satis-table tbody');
+    tbodySatis.innerHTML = "";
+    currentUser.data.satislar.forEach(s => {
+        const toplamCiro = s.miktar * s.fiyat * (1 + s.kdv);
+        const kar = (s.miktar * s.fiyat) - s.maliyet; // SATIŞ - ALIŞ MALİYETİ
+        
+        tbodySatis.innerHTML += `
+            <tr>
+                <td>🏷️ ${s.urun}</td>
+                <td>${s.miktar} Adet</td>
+                <td>${formatPara(s.fiyat)} TL</td>
+                <td>${formatPara(toplamCiro)} TL</td>
+                <td style="color: ${kar >= 0 ? '#10b981' : '#ef4444'}">
+                    ${kar >= 0 ? '+' : ''}${formatPara(kar)} TL
+                </td>
+            </tr>`;
+    });
+
+    // Finansal Kartlar
+    const stokV = currentUser.data.alimlar.reduce((s, x) => s + (x.kalan * x.maliyet), 0) || 0;
+    const toplamSatisCiro = currentUser.data.satislar.reduce((s, x) => s + (x.miktar * x.fiyat), 0) || 0;
+    const toplamSmm = currentUser.data.satislar.reduce((s, x) => s + x.maliyet, 0) || 0;
+    const giderV = currentUser.data.giderler.reduce((s, x) => s + x.tutar, 0) || 0;
+
+    const netKar = (toplamSatisCiro - toplamSmm) - giderV;
+
+    document.getElementById('stok-val').innerText = formatPara(stokV) + " TL";
+    document.getElementById('ciro-val').innerText = formatPara(toplamSatisCiro * 1.20) + " TL"; // Yaklaşık KDV dahil ciro
+    document.getElementById('kar-val').innerText = formatPara(netKar) + " TL";
+    
+    if (typeof renderChart === "function") {
+        renderChart(toplamSatisCiro - toplamSmm, giderV);
+    }
 }
